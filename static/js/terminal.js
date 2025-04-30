@@ -7,6 +7,7 @@ try {
     }
 
     console.log('xterm.js loaded successfully');
+    console.log('Terminal constructor:', window.Terminal);
 
     const term = new Terminal({
         cursorBlink: true,
@@ -15,10 +16,12 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
-        cols: 80,  // Fixed size to avoid FitAddon issues
+        cols: 80,
         rows: 24,
         scrollback: 1000
     });
+
+    console.log('Terminal instance created:', term);
 
     const terminalElement = document.getElementById('terminal');
     if (!terminalElement) {
@@ -55,6 +58,12 @@ try {
             console.log('DOMContentLoaded fired, initializing terminal...');
             setTimeout(initializeTerminal, 100);
         });
+    }
+
+    // Verify onKey exists
+    if (!term.onKey) {
+        console.error('term.onKey is not a function. Available methods:', Object.keys(term));
+        throw new Error('term.onKey is not a function');
     }
 
     let prompt = '';
@@ -106,9 +115,17 @@ try {
         }
     });
 
-    term.on('focus', () => {
-        console.log('Terminal focused');
-    });
+    // Verify on method for focus event
+    if (!term.on) {
+        console.error('term.on is not a function. Using alternative for focus event.');
+        term.onFocus = () => {
+            console.log('Terminal focused');
+        };
+    } else {
+        term.on('focus', () => {
+            console.log('Terminal focused');
+        });
+    }
 } catch (error) {
     console.error('Terminal setup error:', error);
     const terminalElement = document.getElementById('terminal');
