@@ -17,29 +17,28 @@ try {
         console.error('Terminal element not found');
         throw new Error('Terminal element not found');
     }
-    term.open(terminalElement);
 
-    // Function to fit terminal with retry
-    function fitTerminalWithRetry(attempts = 5, delay = 100) {
-        if (attempts <= 0) {
-            console.error('Failed to fit terminal after retries');
-            return;
-        }
+    // Ensure DOM is ready before initializing terminal
+    function initializeTerminal() {
         try {
+            term.open(terminalElement);
             fitAddon.fit();
             const { cols, rows } = term;
-            if (cols > 0 && rows > 0) {
-                console.log(`Terminal fitted: ${cols} cols, ${rows} rows`);
-                return;
-            }
+            console.log(`Terminal initialized: ${cols} cols, ${rows} rows`);
+            term.write('Aetherix ~$ ');
         } catch (e) {
-            console.error('Fit error:', e);
+            console.error('Terminal initialization error:', e);
         }
-        setTimeout(() => fitTerminalWithRetry(attempts - 1, delay), delay);
     }
 
-    // Initial fit with retry
-    fitTerminalWithRetry();
+    // Wait for DOM to be ready
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initializeTerminal, 100); // Small delay to ensure DOM rendering
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(initializeTerminal, 100);
+        });
+    }
 
     // Resize on window resize
     window.addEventListener('resize', () => {
@@ -50,13 +49,6 @@ try {
             console.error('Resize error:', e);
         }
     });
-
-    // Fallback: Force resize after DOM content loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        fitTerminalWithRetry();
-    });
-
-    term.write('Aetherix ~$ ');
 
     let prompt = '';
     term.onKey(({ key, domEvent }) => {
@@ -102,7 +94,11 @@ try {
         }
     });
 
+    term.on('focus', () => {
+        console.log('Terminal focused');
+    });
+
     term.focus();
 } catch (error) {
-    console.error('Terminal initialization error:', error);
+    console.error('Terminal setup error:', error);
 }
