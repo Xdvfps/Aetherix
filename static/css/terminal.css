@@ -19,7 +19,7 @@ body {
     position: relative;
     color: #fff;
     overflow: hidden;
-    padding: 0;  /* Ensure no padding interferes */
+    padding: 0;
 }
 
 .xterm {
@@ -36,5 +36,5 @@ body {
 .xterm-viewport {
     width: 100% !important;
     height: 100% !important;
-    overflow-y: auto !important;  /* Allow scrolling if needed */
+    overflow-y: auto !important;
 }
