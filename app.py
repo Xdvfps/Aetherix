@@ -96,7 +96,7 @@ def generate_response(prompt):
     )
     payload = {
         "prompt": model_prompt,
-        "max_tokens": 100,
+        "max_tokens": 1000,
         "temperature": 1.0
     }
     for attempt in range(3):
