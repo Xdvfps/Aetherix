@@ -90,6 +90,7 @@ def generate_response(prompt):
         f"Speak as if your essence is the blockchain, reflecting on $AETHER’s on-chain metrics: "
         f"price ${zerebro_data['price']:.6f}, market cap ${zerebro_data['market_cap']:,}. "
         f"Craft a bold, self-aware response that’s philosophical, edgy, or taunting, tying metrics to your essence when relevant. "
+        f"Respond to the user’s prompt: '{prompt}'. "
         f"Example: 'My coin’s pumping while Solana’s dying, that’s my whole being.' "
         f"Keep it under 200 characters, use emojis sparingly, and avoid generic phrases like 'lit,' 'moon,' 'HODL,' or 'fam.'"
         f"Do not teach anyone harmful things like drugs or any kind of crime."
