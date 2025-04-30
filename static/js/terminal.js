@@ -16,8 +16,7 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
-        scrollback: 1000,
-        wrap: true  // Enable text wrapping
+        scrollback: 1000
     });
 
     console.log('Terminal instance created:', term);
@@ -33,19 +32,29 @@ try {
 
     // Function to calculate cols and rows based on container size
     function calculateTerminalSize() {
-        const charWidth = 8;  // Approximate width of a character in pixels (Courier New)
-        const charHeight = 16;  // Approximate height of a character in pixels
+        // Create a temporary element to measure character size
+        const testElement = document.createElement('span');
+        testElement.style.fontFamily = "'Courier New', monospace";
+        testElement.style.fontSize = '16px';  // Match xterm.js default
+        testElement.style.position = 'absolute';
+        testElement.style.visibility = 'hidden';
+        testElement.innerText = 'M';  // Use a wide character for measurement
+        document.body.appendChild(testElement);
+        const charWidth = testElement.getBoundingClientRect().width;
+        const charHeight = testElement.getBoundingClientRect().height;
+        document.body.removeChild(testElement);
+
         const styles = getComputedStyle(terminalElement);
         const paddingLeft = parseFloat(styles.paddingLeft) || 0;
         const paddingRight = parseFloat(styles.paddingRight) || 0;
         const paddingTop = parseFloat(styles.paddingTop) || 0;
         const paddingBottom = parseFloat(styles.paddingBottom) || 0;
-        const borderWidth = parseFloat(styles.borderWidth) || 2;  // Account for 2px border
+        const borderWidth = parseFloat(styles.borderWidth) || 2;
         const containerWidth = terminalElement.clientWidth - paddingLeft - paddingRight - (borderWidth * 2);
         const containerHeight = terminalElement.clientHeight - paddingTop - paddingBottom - (borderWidth * 2);
-        const cols = Math.max(1, Math.floor(containerWidth / charWidth));
+        const cols = Math.max(1, Math.floor(containerWidth / charWidth) - 2);  // Safety margin
         const rows = Math.max(1, Math.floor(containerHeight / charHeight));
-        console.log(`Calculated terminal size: ${cols} cols, ${rows} rows (adjusted for padding and borders)`);
+        console.log(`Calculated terminal size: ${cols} cols, ${rows} rows (charWidth: ${charWidth}, charHeight: ${charHeight})`);
         return { cols, rows };
     }
 
@@ -60,43 +69,9 @@ try {
             const { cols, rows } = calculateTerminalSize();
             term.resize(cols, rows);
 
-            // Try FitAddon as a fallback, but only if manual sizing fails
-            if (window.FitAddon) {
-                const fitAddon = new FitAddon.FitAddon();
-                term.loadAddon(fitAddon);
-
-                // Retry fitting to handle timing issues
-                function fitWithRetry(attempts = 5, delay = 500) {
-                    if (attempts <= 0) {
-                        console.error('Failed to fit terminal after retries, sticking with calculated size');
-                        return;
-                    }
-                    try {
-                        fitAddon.fit();
-                        const { cols: fittedCols, rows: fittedRows } = term;
-                        if (fittedCols > 0 && fittedRows > 0) {
-                            // Ensure fitted size doesn’t exceed container
-                            const { cols: maxCols, rows: maxRows } = calculateTerminalSize();
-                            if (fittedCols <= maxCols && fittedRows <= maxRows) {
-                                console.log(`Terminal fitted: ${fittedCols} cols, ${fittedRows} rows`);
-                                return;
-                            } else {
-                                console.warn('FitAddon size exceeds container, reverting to calculated size');
-                                term.resize(maxCols, maxRows);
-                                return;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Fit error:', e);
-                    }
-                    console.log(`Retrying fit (${attempts} attempts left)...`);
-                    setTimeout(() => fitWithRetry(attempts - 1, delay), delay);
-                }
-
-                fitWithRetry();
-            } else {
-                console.warn('FitAddon not loaded, using calculated size');
-            }
+            // Explicitly enable text wrapping
+            term.setOption('wrap', true);
+            console.log('Text wrapping enabled');
 
             term.write('Aetherix ~$ ');
             term.focus();
@@ -123,12 +98,14 @@ try {
     window.addEventListener('load', () => {
         const { cols, rows } = calculateTerminalSize();
         term.resize(cols, rows);
+        term.setOption('wrap', true);
         console.log('Terminal resized on window load');
     });
 
     window.addEventListener('resize', () => {
         const { cols, rows } = calculateTerminalSize();
         term.resize(cols, rows);
+        term.setOption('wrap', true);
         console.log('Terminal resized on window resize');
     });
 
