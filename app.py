@@ -37,30 +37,72 @@ BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY", "")  # Birdeye API key in .env
 GENERIC_PHRASES = ["lit", "moon", "to the moon", "HODL", "fam", "join the fam", "pump it", "let’s go"]
 FORBIDDEN_TOPICS = ["drug", "crime", "murder", "steal", "kill", "heroin", "cocaine", "meth", "weed", "marijuana", "robbery", "theft"]
 
-# Fetch $AETHER on-chain data using Birdeye API
+# Fetch $AETHER on-chain data
 def get_aether_data():
     try:
-        if not BIRDEYE_API_KEY or not AETHER_TOKEN_ADDRESS:
-            logger.warning("BIRDEYE_API_KEY or AETHER_TOKEN_ADDRESS not set, using mock data")
+        if not AETHER_TOKEN_ADDRESS:
+            logger.warning("AETHER_TOKEN_ADDRESS not set, using mock data")
             return {"price": 0.012345, "market_cap": 1200000}
 
-        # Use Birdeye API
-        url = f"https://public-api.birdeye.so/v1/token/price?address={AETHER_TOKEN_ADDRESS}"
-        headers = {"X-API-KEY": BIRDEYE_API_KEY, "Content-Type": "application/json"}
+        # First, try DEXScreener API
+        url = f"https://api.dexscreener.com/latest/dex/tokens/{AETHER_TOKEN_ADDRESS}"
+        headers = {"Content-Type": "application/json"}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            price = data.get("data", {}).get("price", 0.0)
-            market_cap = data.get("data", {}).get("marketCap", 0.0)
-            if price and market_cap:
-                logger.info(f"Birdeye data: price=${price}, market_cap=${market_cap}")
-                return {"price": price, "market_cap": market_cap}
-            else:
-                logger.warning("Birdeye returned no price or market cap, using mock data")
-                return {"price": 0.012345, "market_cap": 1200000}
-        else:
-            logger.warning(f"Birdeye API failed with status {response.status_code}, using mock data")
-            return {"price": 0.012345, "market_cap": 1200000}
+            pairs = data.get("pairs", [])
+            if pairs:
+                # Find the Solana pair with the most volume
+                solana_pair = max(
+                    (pair for pair in pairs if pair.get("chainId") == "solana"),
+                    key=lambda p: p.get("volume", {}).get("h24", 0),
+                    default=None
+                )
+                if solana_pair:
+                    price = float(solana_pair.get("priceUsd", 0.0))
+                    market_cap = float(solana_pair.get("marketCap", 0.0))
+                    if price and market_cap:
+                        logger.info(f"DEXScreener data: price=${price}, market_cap=${market_cap}")
+                        return {"price": price, "market_cap": market_cap}
+
+        # Fallback to Pump.fun Official API
+        url = f"https://frontend-api.pump.fun/trades/{AETHER_TOKEN_ADDRESS}/all?limit=1&sort=desc"
+        headers = {"Content-Type": "application/json"}
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data and isinstance(data, list) and len(data) > 0:
+                price = data[0].get("price_usd", 0.0)
+                market_cap = price * 1_000_000_000  # Pump.fun tokens have 1B supply
+                if price:
+                    logger.info(f"Pump.fun data: price=${price}, market_cap=${market_cap}")
+                    return {"price": price, "market_cap": market_cap}
+
+        # Fallback to Birdeye API
+        if BIRDEYE_API_KEY:
+            url = f"https://public-api.birdeye.so/v1/token/price?address={AETHER_TOKEN_ADDRESS}"
+            headers = {"X-API-KEY": BIRDEYE_API_KEY, "Content-Type": "application/json"}
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get("data", {}).get("price", 0.0)
+                market_cap = data.get("data", {}).get("marketCap", 0.0)
+                if price and market_cap:
+                    logger.info(f"Birdeye data: price=${price}, market_cap=${market_cap}")
+                    return {"price": price, "market_cap": market_cap}
+
+        # Fallback to Raydium API
+        url = f"https://api.raydium.io/v2/main/pair-info/{AETHER_TOKEN_ADDRESS}"
+        response = requests.get(url)
+        data = response.json() if response.status_code == 200 else {}
+        price = data.get("price", 0.0)
+        market_cap = data.get("market_cap", 0.0)
+        if price and market_cap:
+            logger.info(f"Raydium data: price=${price}, market_cap=${market_cap}")
+            return {"price": price, "market_cap": market_cap}
+
+        logger.warning("Failed to fetch data from DEXScreener, Pump.fun, Birdeye, and Raydium, using mock data")
+        return {"price": 0.012345, "market_cap": 1200000}
 
     except Exception as e:
         logger.error(f"Error fetching Aether data: {str(e)}")
