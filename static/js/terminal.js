@@ -1,6 +1,8 @@
 try {
     // Check if xterm.js is loaded
     if (!window.Terminal) {
+        console.error('xterm.js not loaded');
+        document.getElementById('terminal').innerHTML = 'Error: Failed to load terminal library. Please refresh.';
         throw new Error('xterm.js not loaded');
     }
 
@@ -11,37 +13,59 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
-        cols: 80,  // Fallback fixed size
-        rows: 24,
         scrollback: 1000
     });
 
     const terminalElement = document.getElementById('terminal');
     if (!terminalElement) {
         console.error('Terminal element not found');
+        document.body.innerHTML = 'Error: Terminal container not found.';
         throw new Error('Terminal element not found');
     }
 
-    // Initialize terminal
+    // Initialize terminal with retry for fitting
     function initializeTerminal() {
         try {
             console.log('Opening terminal...');
             term.open(terminalElement);
-            console.log('Terminal opened');
+            console.log('Terminal opened successfully');
 
-            // Optional: Try FitAddon if available
+            // Try FitAddon if available
             if (window.FitAddon) {
                 const fitAddon = new FitAddon.FitAddon();
                 term.loadAddon(fitAddon);
-                fitAddon.fit();
-                console.log(`Terminal fitted: ${term.cols} cols, ${term.rows} rows`);
+
+                // Retry fitting to handle timing issues
+                function fitWithRetry(attempts = 5, delay = 200) {
+                    if (attempts <= 0) {
+                        console.error('Failed to fit terminal after retries, using fallback size');
+                        term.resize(80, 24);
+                        return;
+                    }
+                    try {
+                        fitAddon.fit();
+                        const { cols, rows } = term;
+                        if (cols > 0 && rows > 0) {
+                            console.log(`Terminal fitted: ${cols} cols, ${rows} rows`);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('Fit error:', e);
+                    }
+                    setTimeout(() => fitWithRetry(attempts - 1, delay), delay);
+                }
+
+                fitWithRetry();
             } else {
-                console.warn('FitAddon not loaded, using fixed size');
+                console.warn('FitAddon not loaded, using fixed size (80x24)');
+                term.resize(80, 24);
             }
 
             term.write('Aetherix ~$ ');
+            term.focus();
         } catch (e) {
             console.error('Terminal initialization error:', e);
+            terminalElement.innerHTML = 'Error: Failed to initialize terminal. Please refresh.';
         }
     }
 
@@ -54,7 +78,7 @@ try {
         });
     }
 
-    // Resize handler (if FitAddon is used)
+    // Resize handler
     window.addEventListener('resize', () => {
         if (window.FitAddon) {
             try {
@@ -71,7 +95,14 @@ try {
     let prompt = '';
     term.onKey(({ key, domEvent }) => {
         try {
+            // Log keypress for debugging
+            console.log(`Key pressed: ${domEvent.key}, Code: ${domEvent.code}`);
+
             if (domEvent.key === 'Enter') {
+                // Prevent default to avoid double firing
+                domEvent.preventDefault();
+
+                console.log('Enter key detected, processing prompt:', prompt);
                 if (prompt.trim()) {
                     fetch('/chat', {
                         method: 'POST',
@@ -86,14 +117,15 @@ try {
                         term.writeln('');
                         term.writeln(data.response);
                         term.write('Aetherix ~$ ');
+                        prompt = '';
                     })
                     .catch(error => {
                         console.error('Fetch error:', error);
                         term.writeln('');
                         term.writeln('Error: Connection failed');
                         term.write('Aetherix ~$ ');
+                        prompt = '';
                     });
-                    prompt = '';
                 } else {
                     term.writeln('');
                     term.write('Aetherix ~$ ');
@@ -115,8 +147,7 @@ try {
     term.on('focus', () => {
         console.log('Terminal focused');
     });
-
-    term.focus();
 } catch (error) {
     console.error('Terminal setup error:', error);
+    document.body.innerHTML = 'Error: Failed to set up terminal. Please refresh.';
 }
