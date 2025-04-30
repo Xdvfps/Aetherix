@@ -2,9 +2,11 @@ try {
     // Check if xterm.js is loaded
     if (!window.Terminal) {
         console.error('xterm.js not loaded');
-        document.getElementById('terminal').innerHTML = 'Error: Failed to load terminal library. Please refresh.';
+        document.getElementById('terminal').innerHTML = 'Error: Failed to load terminal library (xterm.js). Please refresh.';
         throw new Error('xterm.js not loaded');
     }
+
+    console.log('xterm.js loaded successfully');
 
     const term = new Terminal({
         cursorBlink: true,
@@ -13,6 +15,8 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
+        cols: 80,  // Fixed size to avoid FitAddon issues
+        rows: 24,
         scrollback: 1000
     });
 
@@ -23,85 +27,43 @@ try {
         throw new Error('Terminal element not found');
     }
 
-    // Initialize terminal with retry for fitting
+    console.log('Terminal element found');
+
+    // Initialize terminal
     function initializeTerminal() {
         try {
             console.log('Opening terminal...');
             term.open(terminalElement);
             console.log('Terminal opened successfully');
 
-            // Try FitAddon if available
-            if (window.FitAddon) {
-                const fitAddon = new FitAddon.FitAddon();
-                term.loadAddon(fitAddon);
-
-                // Retry fitting to handle timing issues
-                function fitWithRetry(attempts = 5, delay = 200) {
-                    if (attempts <= 0) {
-                        console.error('Failed to fit terminal after retries, using fallback size');
-                        term.resize(80, 24);
-                        return;
-                    }
-                    try {
-                        fitAddon.fit();
-                        const { cols, rows } = term;
-                        if (cols > 0 && rows > 0) {
-                            console.log(`Terminal fitted: ${cols} cols, ${rows} rows`);
-                            return;
-                        }
-                    } catch (e) {
-                        console.error('Fit error:', e);
-                    }
-                    setTimeout(() => fitWithRetry(attempts - 1, delay), delay);
-                }
-
-                fitWithRetry();
-            } else {
-                console.warn('FitAddon not loaded, using fixed size (80x24)');
-                term.resize(80, 24);
-            }
-
             term.write('Aetherix ~$ ');
             term.focus();
         } catch (e) {
             console.error('Terminal initialization error:', e);
-            terminalElement.innerHTML = 'Error: Failed to initialize terminal. Please refresh.';
+            terminalElement.innerHTML = 'Error: Failed to initialize terminal: ' + e.message + '. Please refresh.';
+            throw e;
         }
     }
 
     // Wait for DOM to be ready
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        console.log('DOM ready, initializing terminal...');
         setTimeout(initializeTerminal, 100);
     } else {
+        console.log('Waiting for DOMContentLoaded...');
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded fired, initializing terminal...');
             setTimeout(initializeTerminal, 100);
         });
     }
 
-    // Resize handler
-    window.addEventListener('resize', () => {
-        if (window.FitAddon) {
-            try {
-                const fitAddon = new FitAddon.FitAddon();
-                term.loadAddon(fitAddon);
-                fitAddon.fit();
-                console.log('Terminal resized');
-            } catch (e) {
-                console.error('Resize error:', e);
-            }
-        }
-    });
-
     let prompt = '';
     term.onKey(({ key, domEvent }) => {
         try {
-            // Log keypress for debugging
             console.log(`Key pressed: ${domEvent.key}, Code: ${domEvent.code}`);
 
             if (domEvent.key === 'Enter') {
-                // Prevent default to avoid double firing
                 domEvent.preventDefault();
-
                 console.log('Enter key detected, processing prompt:', prompt);
                 if (prompt.trim()) {
                     fetch('/chat', {
@@ -149,5 +111,10 @@ try {
     });
 } catch (error) {
     console.error('Terminal setup error:', error);
-    document.body.innerHTML = 'Error: Failed to set up terminal. Please refresh.';
+    const terminalElement = document.getElementById('terminal');
+    if (terminalElement) {
+        terminalElement.innerHTML = 'Error: Failed to set up terminal: ' + error.message + '. Please refresh.';
+    } else {
+        document.body.innerHTML = 'Error: Failed to set up terminal: ' + error.message + '. Please refresh.';
+    }
 }
