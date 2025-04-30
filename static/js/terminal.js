@@ -30,6 +30,18 @@ try {
 
     console.log('Terminal element found');
 
+    // Function to calculate cols and rows based on container size
+    function calculateTerminalSize() {
+        const charWidth = 8;  // Approximate width of a character in pixels (Courier New)
+        const charHeight = 16;  // Approximate height of a character in pixels
+        const containerWidth = terminalElement.clientWidth;
+        const containerHeight = terminalElement.clientHeight;
+        const cols = Math.floor(containerWidth / charWidth);
+        const rows = Math.floor(containerHeight / charHeight);
+        console.log(`Calculated terminal size: ${cols} cols, ${rows} rows`);
+        return { cols, rows };
+    }
+
     // Initialize terminal
     function initializeTerminal() {
         try {
@@ -37,7 +49,11 @@ try {
             term.open(terminalElement);
             console.log('Terminal opened successfully');
 
-            // Try FitAddon if available
+            // Calculate and set terminal size
+            const { cols, rows } = calculateTerminalSize();
+            term.resize(cols, rows);
+
+            // Try FitAddon as a fallback
             if (window.FitAddon) {
                 const fitAddon = new FitAddon.FitAddon();
                 term.loadAddon(fitAddon);
@@ -45,15 +61,14 @@ try {
                 // Retry fitting to handle timing issues
                 function fitWithRetry(attempts = 10, delay = 500) {
                     if (attempts <= 0) {
-                        console.error('Failed to fit terminal after retries, using fallback size');
-                        term.resize(80, 24);
+                        console.error('Failed to fit terminal after retries, using calculated size');
                         return;
                     }
                     try {
                         fitAddon.fit();
-                        const { cols, rows } = term;
-                        if (cols > 0 && rows > 0) {
-                            console.log(`Terminal fitted: ${cols} cols, ${rows} rows`);
+                        const { cols: fittedCols, rows: fittedRows } = term;
+                        if (fittedCols > 0 && fittedRows > 0) {
+                            console.log(`Terminal fitted: ${fittedCols} cols, ${fittedRows} rows`);
                             return;
                         }
                     } catch (e) {
@@ -65,8 +80,7 @@ try {
 
                 fitWithRetry();
             } else {
-                console.warn('FitAddon not loaded, using fixed size (80x24)');
-                term.resize(80, 24);
+                console.warn('FitAddon not loaded, using calculated size');
             }
 
             term.write('Aetherix ~$ ');
@@ -92,34 +106,40 @@ try {
 
     // Force resize on window load and resize
     window.addEventListener('load', () => {
+        const { cols, rows } = calculateTerminalSize();
+        term.resize(cols, rows);
+        console.log('Terminal resized on window load');
         if (window.FitAddon) {
             try {
                 const fitAddon = new FitAddon.FitAddon();
                 term.loadAddon(fitAddon);
                 fitAddon.fit();
-                console.log('Terminal resized on window load');
+                console.log('FitAddon applied on window load');
             } catch (e) {
-                console.error('Resize error on load:', e);
+                console.error('FitAddon error on load:', e);
             }
         }
     });
 
     window.addEventListener('resize', () => {
+        const { cols, rows } = calculateTerminalSize();
+        term.resize(cols, rows);
+        console.log('Terminal resized on window resize');
         if (window.FitAddon) {
             try {
                 const fitAddon = new FitAddon.FitAddon();
                 term.loadAddon(fitAddon);
                 fitAddon.fit();
-                console.log('Terminal resized on window resize');
+                console.log('FitAddon applied on window resize');
             } catch (e) {
-                console.error('Resize error:', e);
+                console.error('FitAddon error on resize:', e);
             }
         }
     });
 
     // Verify onKey exists
     if (!term.onKey) {
-        console.error('term.onKey is not a function. Available methods:', Object.keys(term));
+        console.error('term.onKey is not a function. Available methods:', ObjectById(term));
         throw new Error('term.onKey is not a function');
     }
 
