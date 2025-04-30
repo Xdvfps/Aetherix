@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetherix Terminal</title>
+    <link rel="stylesheet" href="/static/css/terminal.css" onerror="console.error('Failed to load terminal.css')">
+    <link rel="stylesheet" href="https://unpkg.com/xterm@4.19.0/css/xterm.css" onerror="console.error('Failed to load xterm.css')">
+    <script>
+        // Neutralize Web3 provider to prevent extension errors (e.g., inpage.js)
+        window.ethereum = {};
+        window.solana = {};
+    </script>
+</head>
+<body>
+    <div id="terminal"></div>
+    <script src="https://unpkg.com/xterm@4.19.0/lib/xterm.js" onerror="console.error('Failed to load xterm.js')"></script>
+    <script src="/static/js/terminal.js" onerror="console.error('Failed to load terminal.js')"></script>
+</body>
+</html>
