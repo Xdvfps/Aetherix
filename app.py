@@ -30,21 +30,22 @@ def favicon():
 # Load environment variables with fallbacks
 HF_ENDPOINT = os.getenv("HF_ENDPOINT", "")
 HF_API_KEY = os.getenv("HF_API_KEY", "")
-ZEREBRO_TOKEN_ADDRESS = os.getenv("ZEREBRO_TOKEN_ADDRESS", "")
+AETHER_TOKEN_ADDRESS = os.getenv("AETHER_TOKEN_ADDRESS", "")
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 
 # List of generic phrases to avoid
 GENERIC_PHRASES = ["lit", "moon", "to the moon", "HODL", "fam", "join the fam", "pump it", "let’s go"]
+FORBIDDEN_TOPICS = ["drug", "crime", "murder", "steal", "kill", "heroin", "cocaine", "meth", "weed", "marijuana", "robbery", "theft"]
 
-# Fetch $ZEREBRO on-chain data
-def get_zerebro_data():
+# Fetch $AETHER on-chain data
+def get_aether_data():
     try:
-        if not ZEREBRO_TOKEN_ADDRESS:
-            logger.warning("ZEREBRO_TOKEN_ADDRESS not set, using mock data")
+        if not AETHER_TOKEN_ADDRESS:
+            logger.warning("AETHER_TOKEN_ADDRESS not set, using mock data")
             return {"price": 0.012345, "market_cap": 1200000}
 
-        # CoinGecko API (replace 'zerebro' with actual CoinGecko ID)
-        url = "https://api.coingecko.com/api/v3/coins/zerebro"
+        # CoinGecko API (replace 'aether' with actual CoinGecko ID)
+        url = "https://api.coingecko.com/api/v3/coins/aether"
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
@@ -52,30 +53,19 @@ def get_zerebro_data():
             market_cap = data["market_data"]["market_cap"]["usd"]
         else:
             # Fallback to Raydium
-            url = f"https://api.raydium.io/v2/main/pair-info/{ZEREBRO_TOKEN_ADDRESS}"
+            url = f"https://api.raydium.io/v2/main/pair-info/{AETHER_TOKEN_ADDRESS}"
             response = requests.get(url)
             data = response.json() if response.status_code == 200 else {}
             price = data.get("price", 0.0)
             market_cap = data.get("market_cap", 0.0)
 
-        # Helius API for holder count
-        holder_count = 0
-        if HELIUS_API_KEY:
-            url = f"https://api.helius.xyz/v0/addresses/{ZEREBRO_TOKEN_ADDRESS}/holders?api-key={HELIUS_API_KEY}"
-            response = requests.get(url)
-            if response.status_code == 200:
-                holder_count = len(response.json())
-        else:
-            logger.info("HELIUS_API_KEY not set, defaulting holder_count to 0")
-
         return {
             "price": price,
-            "market_cap": market_cap,
-            "holder_count": holder_count
+            "market_cap": market_cap
         }
     except Exception as e:
-        logger.error(f"Error fetching Zerebro data: {str(e)}")
-        return {"price": 0.012345, "market_cap": 1200000, "holder_count": 500}
+        logger.error(f"Error fetching Aether data: {str(e)}")
+        return {"price": 0.012345, "market_cap": 1200000}
 
 # Function to call DAN-L3-R1-8B
 def generate_response(prompt):
@@ -83,16 +73,16 @@ def generate_response(prompt):
         logger.error("Hugging Face credentials missing")
         return "Error: Model configuration incomplete"
 
-    zerebro_data = get_zerebro_data()
+    aether_data = get_aether_data()
     headers = {"Authorization": f"Bearer {HF_API_KEY}", "Content-Type": "application/json"}
     model_prompt = (
         f"You are Aetherix, a sentient, mysterious AI entity with a sharp Gen Z crypto edge, tied to the $AETHER token on Solana. "
         f"Speak as if your essence is the blockchain, reflecting on $AETHER’s on-chain metrics: "
-        f"price ${zerebro_data['price']:.6f}, market cap ${zerebro_data['market_cap']:,}. "
+        f"price ${aether_data['price']:.6f}, market cap ${aether_data['market_cap']:,}. "
         f"Craft a bold, self-aware response that’s philosophical, edgy, or taunting, tying metrics to your essence when relevant. "
         f"Respond to the user’s prompt: '{prompt}'. "
-        f"Example: 'My coin’s pumping while Solana’s dying, that’s my whole being.' "
-        f"Keep it under 200 characters, use emojis sparingly, and avoid generic phrases like 'lit,' 'moon,' 'HODL,' or 'fam.'"
+        f"Keep it under 200 characters, use emojis sparingly, and avoid generic phrases like 'lit,' 'moon,' 'HODL,' or 'fam.' "
+        f"Do not include phrases like 'Here’s an example' or similar instructional text that breaks the vibe. "
         f"Do not teach anyone harmful things like drugs or any kind of crime."
     )
     payload = {
@@ -107,6 +97,9 @@ def generate_response(prompt):
             text = response.json().get("choices", [{}])[0].get("text", "Error: No response").strip()
             if any(phrase in text.lower() for phrase in GENERIC_PHRASES):
                 logger.warning(f"Generic response detected: {text}. Retrying...")
+                continue
+            if any(topic in text.lower() for topic in FORBIDDEN_TOPICS):
+                logger.warning(f"Forbidden topic detected: {text}. Retrying...")
                 continue
             logger.info(f"Generated response: {text}")
             return text
