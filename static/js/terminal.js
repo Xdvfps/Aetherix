@@ -1,4 +1,9 @@
 try {
+    // Check if xterm.js is loaded
+    if (!window.Terminal) {
+        throw new Error('xterm.js not loaded');
+    }
+
     const term = new Terminal({
         cursorBlink: true,
         theme: {
@@ -6,11 +11,10 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
+        cols: 80,  // Fallback fixed size
+        rows: 24,
         scrollback: 1000
     });
-
-    const fitAddon = new FitAddon.FitAddon();
-    term.loadAddon(fitAddon);
 
     const terminalElement = document.getElementById('terminal');
     if (!terminalElement) {
@@ -18,13 +22,23 @@ try {
         throw new Error('Terminal element not found');
     }
 
-    // Ensure DOM is ready before initializing terminal
+    // Initialize terminal
     function initializeTerminal() {
         try {
+            console.log('Opening terminal...');
             term.open(terminalElement);
-            fitAddon.fit();
-            const { cols, rows } = term;
-            console.log(`Terminal initialized: ${cols} cols, ${rows} rows`);
+            console.log('Terminal opened');
+
+            // Optional: Try FitAddon if available
+            if (window.FitAddon) {
+                const fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                fitAddon.fit();
+                console.log(`Terminal fitted: ${term.cols} cols, ${term.rows} rows`);
+            } else {
+                console.warn('FitAddon not loaded, using fixed size');
+            }
+
             term.write('Aetherix ~$ ');
         } catch (e) {
             console.error('Terminal initialization error:', e);
@@ -33,20 +47,24 @@ try {
 
     // Wait for DOM to be ready
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(initializeTerminal, 100); // Small delay to ensure DOM rendering
+        setTimeout(initializeTerminal, 100);
     } else {
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(initializeTerminal, 100);
         });
     }
 
-    // Resize on window resize
+    // Resize handler (if FitAddon is used)
     window.addEventListener('resize', () => {
-        try {
-            fitAddon.fit();
-            console.log('Terminal resized');
-        } catch (e) {
-            console.error('Resize error:', e);
+        if (window.FitAddon) {
+            try {
+                const fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                fitAddon.fit();
+                console.log('Terminal resized');
+            } catch (e) {
+                console.error('Resize error:', e);
+            }
         }
     });
 
