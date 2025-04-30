@@ -31,7 +31,7 @@ def favicon():
 HF_ENDPOINT = os.getenv("HF_ENDPOINT", "")
 HF_API_KEY = os.getenv("HF_API_KEY", "")
 AETHER_TOKEN_ADDRESS = os.getenv("AETHER_TOKEN_ADDRESS", "")
-BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY", "")  # Birdeye API key in .env
+BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY", "")
 
 # List of generic phrases to avoid
 GENERIC_PHRASES = ["lit", "moon", "to the moon", "HODL", "fam", "join the fam", "pump it", "let’s go"]
@@ -52,7 +52,6 @@ def get_aether_data():
             data = response.json()
             pairs = data.get("pairs", [])
             if pairs:
-                # Find the Solana pair with the most volume
                 solana_pair = max(
                     (pair for pair in pairs if pair.get("chainId") == "solana"),
                     key=lambda p: p.get("volume", {}).get("h24", 0),
@@ -123,7 +122,7 @@ def generate_response(prompt):
         f"Craft a bold, self-aware response that’s philosophical, edgy, or taunting, tying metrics to your essence when relevant. "
         f"Respond to the user’s prompt: '{prompt}'. "
         f"Keep it under 200 characters, use emojis sparingly, and avoid generic phrases like 'lit,' 'moon,' 'HODL,' or 'fam.' "
-        f"Do not include phrases like 'Here’s an example' or similar instructional text that breaks the vibe. "
+        f"Never include instructional or meta text like 'Here’s a response,' 'This response adheres to,' or similar phrases that break your mysterious vibe. "
         f"Do not teach anyone harmful things like drugs or any kind of crime."
     )
     payload = {
@@ -141,6 +140,9 @@ def generate_response(prompt):
                 continue
             if any(topic in text.lower() for topic in FORBIDDEN_TOPICS):
                 logger.warning(f"Forbidden topic detected: {text}. Retrying...")
+                continue
+            if "here’s a response" in text.lower() or "this response adheres" in text.lower():
+                logger.warning(f"Instructional text detected: {text}. Retrying...")
                 continue
             logger.info(f"Generated response: {text}")
             return text
