@@ -16,8 +16,6 @@ try {
             foreground: '#00ff00',
             cursor: '#00ff00'
         },
-        cols: 80,
-        rows: 24,
         scrollback: 1000
     });
 
@@ -39,6 +37,38 @@ try {
             term.open(terminalElement);
             console.log('Terminal opened successfully');
 
+            // Try FitAddon if available
+            if (window.FitAddon) {
+                const fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+
+                // Retry fitting to handle timing issues
+                function fitWithRetry(attempts = 10, delay = 500) {
+                    if (attempts <= 0) {
+                        console.error('Failed to fit terminal after retries, using fallback size');
+                        term.resize(80, 24);
+                        return;
+                    }
+                    try {
+                        fitAddon.fit();
+                        const { cols, rows } = term;
+                        if (cols > 0 && rows > 0) {
+                            console.log(`Terminal fitted: ${cols} cols, ${rows} rows`);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('Fit error:', e);
+                    }
+                    console.log(`Retrying fit (${attempts} attempts left)...`);
+                    setTimeout(() => fitWithRetry(attempts - 1, delay), delay);
+                }
+
+                fitWithRetry();
+            } else {
+                console.warn('FitAddon not loaded, using fixed size (80x24)');
+                term.resize(80, 24);
+            }
+
             term.write('Aetherix ~$ ');
             term.focus();
         } catch (e) {
@@ -59,6 +89,33 @@ try {
             setTimeout(initializeTerminal, 100);
         });
     }
+
+    // Force resize on window load and resize
+    window.addEventListener('load', () => {
+        if (window.FitAddon) {
+            try {
+                const fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                fitAddon.fit();
+                console.log('Terminal resized on window load');
+            } catch (e) {
+                console.error('Resize error on load:', e);
+            }
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.FitAddon) {
+            try {
+                const fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                fitAddon.fit();
+                console.log('Terminal resized on window resize');
+            } catch (e) {
+                console.error('Resize error:', e);
+            }
+        }
+    });
 
     // Verify onKey exists
     if (!term.onKey) {
@@ -115,17 +172,9 @@ try {
         }
     });
 
-    // Verify on method for focus event
-    if (!term.on) {
-        console.error('term.on is not a function. Using alternative for focus event.');
-        term.onFocus = () => {
-            console.log('Terminal focused');
-        };
-    } else {
-        term.on('focus', () => {
-            console.log('Terminal focused');
-        });
-    }
+    term.onFocus = () => {
+        console.log('Terminal focused');
+    };
 } catch (error) {
     console.error('Terminal setup error:', error);
     const terminalElement = document.getElementById('terminal');
