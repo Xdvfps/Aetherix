@@ -1,6 +1,7 @@
 body {
     background-color: #1a1a1a;
     margin: 0;
+    padding: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -14,4 +15,22 @@ body {
     background-color: #000;
     border: 2px solid #0f0;
     box-shadow: 0 0 10px #0f0;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.xterm {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.xterm-screen {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.xterm-viewport {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
 }
