@@ -6,7 +6,7 @@ import logging
 from jinja2 import TemplateNotFound
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -33,6 +33,12 @@ HF_API_KEY = os.getenv("HF_API_KEY", "")
 AETHER_TOKEN_ADDRESS = os.getenv("AETHER_TOKEN_ADDRESS", "")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY", "")
 
+# Log environment variables for debugging (sensitive parts redacted)
+logger.info(f"HF_ENDPOINT: {HF_ENDPOINT}")
+logger.info(f"HF_API_KEY: {'***' if HF_API_KEY else 'Not set'}")
+logger.info(f"AETHER_TOKEN_ADDRESS: {AETHER_TOKEN_ADDRESS}")
+logger.info(f"BIRDEYE_API_KEY: {'***' if BIRDEYE_API_KEY else 'Not set'}")
+
 # List of generic phrases to avoid
 GENERIC_PHRASES = ["lit", "moon", "to the moon", "HODL", "fam", "join the fam", "pump it", "let’s go"]
 FORBIDDEN_TOPICS = ["drug", "crime", "murder", "steal", "kill", "heroin", "cocaine", "meth", "weed", "marijuana", "robbery", "theft"]
@@ -44,7 +50,42 @@ def get_aether_data():
             logger.warning("AETHER_TOKEN_ADDRESS not set, using mock data")
             return {"price": 0.012345, "market_cap": 1200000}
 
-        # First, try DEXScreener API
+        AETHER_TOTAL_SUPPLY = 1_000_000_000  # 1 billion tokens
+
+        # Try Birdeye API for price
+        if BIRDEYE_API_KEY:
+            url = f"https://public-api.birdeye.so/defi/price?address={AETHER_TOKEN_ADDRESS}"
+            headers = {"X-API-KEY": BIRDEYE_API_KEY, "Content-Type": "application/json"}
+            for attempt in range(3):
+                response = requests.get(url, headers=headers)
+                logger.info(f"Birdeye price API response status: {response.status_code}")
+                logger.info(f"Birdeye price API response content: {response.text}")
+                if response.status_code == 429:
+                    logger.info(f"Rate limit hit, retrying in {2 ** attempt} seconds...")
+                    time.sleep(2 ** attempt)
+                    continue
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        if not data.get("success", False):
+                            logger.error(f"Birdeye price API error: {data.get('message', 'Unknown error')}")
+                            break
+                        price = data.get("data", {}).get("value", 0.0)
+                        if price:
+                            market_cap = price * AETHER_TOTAL_SUPPLY
+                            logger.info(f"Birdeye price data: price=${price}, market_cap=${market_cap}")
+                            return {"price": price, "market_cap": market_cap}
+                        logger.warning("Birdeye returned zero price, falling back")
+                        break
+                    except ValueError as e:
+                        logger.error(f"JSON decode error: {str(e)}, response: {response.text}")
+                        break
+                else:
+                    logger.error(f"Birdeye price API failed with status {response.status_code}: {response.text}")
+                    break
+
+        # Fallback to DEXScreener
+        logger.info("Falling back to DEXScreener")
         url = f"https://api.dexscreener.com/latest/dex/tokens/{AETHER_TOKEN_ADDRESS}"
         headers = {"Content-Type": "application/json"}
         response = requests.get(url, headers=headers)
@@ -59,12 +100,13 @@ def get_aether_data():
                 )
                 if solana_pair:
                     price = float(solana_pair.get("priceUsd", 0.0))
-                    market_cap = float(solana_pair.get("marketCap", 0.0))
+                    market_cap = float(solana_pair.get("marketCap", 0.0)) or (price * AETHER_TOTAL_SUPPLY)
                     if price and market_cap:
                         logger.info(f"DEXScreener data: price=${price}, market_cap=${market_cap}")
                         return {"price": price, "market_cap": market_cap}
 
-        # Fallback to Pump.fun Official API
+        # Fallback to Pump.fun
+        logger.info("Falling back to Pump.fun")
         url = f"https://frontend-api.pump.fun/trades/{AETHER_TOKEN_ADDRESS}/all?limit=1&sort=desc"
         headers = {"Content-Type": "application/json"}
         response = requests.get(url, headers=headers)
@@ -72,35 +114,23 @@ def get_aether_data():
             data = response.json()
             if data and isinstance(data, list) and len(data) > 0:
                 price = data[0].get("price_usd", 0.0)
-                market_cap = price * 1_000_000_000  # Pump.fun tokens have 1B supply
+                market_cap = price * AETHER_TOTAL_SUPPLY  # 1B supply
                 if price:
                     logger.info(f"Pump.fun data: price=${price}, market_cap=${market_cap}")
                     return {"price": price, "market_cap": market_cap}
 
-        # Fallback to Birdeye API
-        if BIRDEYE_API_KEY:
-            url = f"https://public-api.birdeye.so/v1/token/price?address={AETHER_TOKEN_ADDRESS}"
-            headers = {"X-API-KEY": BIRDEYE_API_KEY, "Content-Type": "application/json"}
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                price = data.get("data", {}).get("price", 0.0)
-                market_cap = data.get("data", {}).get("marketCap", 0.0)
-                if price and market_cap:
-                    logger.info(f"Birdeye data: price=${price}, market_cap=${market_cap}")
-                    return {"price": price, "market_cap": market_cap}
-
-        # Fallback to Raydium API
+        # Fallback to Raydium
+        logger.info("Falling back to Raydium")
         url = f"https://api.raydium.io/v2/main/pair-info/{AETHER_TOKEN_ADDRESS}"
         response = requests.get(url)
         data = response.json() if response.status_code == 200 else {}
         price = data.get("price", 0.0)
-        market_cap = data.get("market_cap", 0.0)
+        market_cap = data.get("market_cap", 0.0) or (price * AETHER_TOTAL_SUPPLY)
         if price and market_cap:
             logger.info(f"Raydium data: price=${price}, market_cap=${market_cap}")
             return {"price": price, "market_cap": market_cap}
 
-        logger.warning("Failed to fetch data from DEXScreener, Pump.fun, Birdeye, and Raydium, using mock data")
+        logger.warning("Failed to fetch data from all sources, using mock data")
         return {"price": 0.012345, "market_cap": 1200000}
 
     except Exception as e:
